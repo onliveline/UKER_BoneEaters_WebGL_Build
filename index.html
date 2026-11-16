@@ -1,0 +1,854 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, height=device-height, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="theme-color" content="#d5f3ff">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <title>BoneEaters</title>
+    <meta name="description" content="Shrink down into the human body and help the Bone Builder stop the Bone Eaters. Play in your browser on desktop or phone.">
+    <!-- Link previews (chat apps, social media). Crawlers need absolute URLs. -->
+    <meta property="og:type" content="website">
+    <meta property="og:title" content="BoneEaters">
+    <meta property="og:description" content="Shrink down into the human body and help the Bone Builder stop the Bone Eaters. Play in your browser on desktop or phone.">
+    <meta property="og:url" content="https://onliveline.github.io/UKER_BoneEaters_WebGL_Build/">
+    <meta property="og:image" content="https://onliveline.github.io/UKER_BoneEaters_WebGL_Build/TemplateData/og-image.png">
+    <meta property="og:image:type" content="image/png">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+    <meta property="og:image:alt" content="The Bone Eaters monsters next to the game logo">
+    <meta name="twitter:card" content="summary_large_image">
+    <link rel="manifest" href="TemplateData/manifest.webmanifest">
+    <link rel="icon" type="image/png" href="TemplateData/favicon.png">
+    <link rel="apple-touch-icon" href="TemplateData/icon-192.png">
+    <link rel="preload" as="image" href="TemplateData/logo.webp">
+    <link rel="preload" as="image" href="TemplateData/characters.webp">
+    <style>
+      /* Rajdhani is the Main Menu font (SIL Open Font License), subset to Latin. */
+      @font-face { font-family: "Rajdhani"; font-weight: 600; font-display: swap; src: url("TemplateData/Rajdhani-SemiBold.woff2") format("woff2"); }
+      @font-face { font-family: "Rajdhani"; font-weight: 700; font-display: swap; src: url("TemplateData/Rajdhani-Bold.woff2") format("woff2"); }
+      /* Colours sampled from the Main Menu. */
+      :root {
+        --sky: #d5f3ff;
+        --sky-deep: #aee0f7;
+        --blue: #21789b;
+        --blue-light: #3aa3cc;
+        --ink: #0d475b;
+        --white: #ffffff;
+        --edge: #b8e3f5;
+      }
+      * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+      html, body {
+        margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden;
+        background: radial-gradient(ellipse at 50% 35%, #e9f9ff 0%, var(--sky) 45%, #b9e4f6 100%);
+        color: var(--ink);
+        font-family: "Rajdhani", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+        font-weight: 600;
+        overscroll-behavior: none; touch-action: none;
+        -webkit-user-select: none; user-select: none;
+        /* Themed cursors (desktop): the script sets these variables once the cursor images load. */
+        cursor: var(--cursor-default, default);
+      }
+      /* Portrait stage with modern phone proportions (1170:2532). Desktop: as tall as the window, letterboxed. Phone: full screen. */
+      #stage {
+        position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+        height: 100vh; height: 100dvh;
+        width: calc(100vh * 1170 / 2532); width: calc(100dvh * 1170 / 2532);
+        max-width: 100vw;
+        box-shadow: 0 0 0 1px rgba(13,71,91,.08), 0 20px 70px rgba(13,71,91,.28);
+        background: var(--sky);
+        overflow: hidden;
+      }
+      body.mobile #stage {
+        left: 0; top: 0; transform: none; width: 100vw; height: 100vh; height: 100dvh;
+        max-width: none; box-shadow: none;
+      }
+      #unity-canvas { width: 100%; height: 100%; display: block; background: var(--sky); outline: none; }
+
+      /* Splash art shared by the loading screen and the start screen, laid out like the Main Menu. */
+      #splash {
+        position: absolute; inset: 0; z-index: 9; overflow: hidden;
+        background: radial-gradient(circle at 50% 24%, var(--sky-deep) 0%, var(--sky) 42%);
+        transition: opacity .45s ease;
+      }
+      #splash.hidden { opacity: 0; pointer-events: none; }
+      #characters {
+        position: absolute; left: 50%; top: 1.5%; width: 104%; transform: translateX(-50%);
+        animation: bob 3.2s ease-in-out infinite;
+        filter: drop-shadow(0 10px 18px rgba(33,120,155,.25));
+      }
+      #logo {
+        position: absolute; left: 50%; top: 39%; width: 82%; transform: translateX(-50%);
+        animation: pop .7s cubic-bezier(.2,1.6,.4,1) both .1s;
+      }
+      @keyframes bob { 0%,100% { transform: translate(-50%, 0); } 50% { transform: translate(-50%, -2.2%); } }
+      @keyframes pop { from { transform: translateX(-50%) scale(.6); opacity: 0; } to { transform: translateX(-50%) scale(1); opacity: 1; } }
+
+      .overlay {
+        position: absolute; inset: 0; display: flex; flex-direction: column;
+        align-items: center; justify-content: flex-end; text-align: center; gap: 14px;
+        padding: 24px 24px 13%;
+        z-index: 10; transition: opacity .35s ease;
+      }
+      .overlay.hidden { opacity: 0; pointer-events: none; }
+      .subtitle { color: var(--ink); font-size: clamp(15px, 2.1vh, 19px); margin: 0; max-width: 30ch; line-height: 1.35; }
+
+      /* Loading bar: a white pill like the menu buttons, filled in logo blue, with a Bone Eater chomping along. */
+      #progress {
+        position: relative; width: 78%; height: clamp(22px, 3.2vh, 30px);
+        border-radius: 999px; background: var(--white);
+        box-shadow: 0 4px 0 var(--edge), 0 8px 18px rgba(33,120,155,.18);
+        padding: 4px;
+      }
+      #progress-track { position: relative; width: 100%; height: 100%; border-radius: 999px; background: #e6f6fc; overflow: hidden; }
+      /* Width and position are animated by the script (requestAnimationFrame), not CSS transitions. */
+      #progress-fill {
+        width: 0%; height: 100%; border-radius: 999px;
+        background:
+          repeating-linear-gradient(-45deg, rgba(255,255,255,.18) 0 10px, rgba(255,255,255,0) 10px 20px),
+          linear-gradient(180deg, var(--blue-light), var(--blue));
+        background-size: 28px 28px, 100% 100%;
+        animation: stripes 1s linear infinite;
+      }
+      @keyframes stripes { from { background-position: 0 0, 0 0; } to { background-position: 28px 0, 0 0; } }
+      #muncher {
+        position: absolute; top: 50%; left: 4px; width: clamp(40px, 6vh, 56px);
+        transform: translate(-50%, -54%); pointer-events: none;
+      }
+      /* Same badge as the in-game score: white Bone Eater head on an orange circle. */
+      #muncher-badge {
+        width: 100%; aspect-ratio: 1; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+        background: radial-gradient(circle at 40% 30%, #fda349, #fc8e49 70%); border: 3px solid var(--white);
+        box-shadow: 0 3px 6px rgba(13,71,91,.3); animation: chomp .5s ease-in-out infinite;
+      }
+      #muncher img { width: 70%; display: block; }
+      @keyframes chomp { 0%,100% { transform: scale(1) rotate(-4deg); } 50% { transform: scale(1.12, .9) rotate(4deg); } }
+      /* Between scenes: Unity loads a level in one long frame, so the veil is shown just before and
+         its animation runs on the compositor (transform/opacity), which keeps moving meanwhile. */
+      #scene-loading {
+        position: absolute; inset: 0; z-index: 6; display: flex; flex-direction: column;
+        align-items: center; justify-content: center; gap: 12px; pointer-events: none;
+        background: radial-gradient(circle at 50% 42%, rgba(233,249,255,.94) 0%, rgba(213,243,255,.94) 45%, rgba(185,228,246,.96) 100%);
+        opacity: 0; transition: opacity .18s ease;
+      }
+      #scene-loading.on { opacity: 1; pointer-events: auto; transition-duration: .12s; }
+      #scene-loading .badge { width: clamp(52px, 8vh, 72px); animation: chomp .5s ease-in-out infinite; will-change: transform; }
+      #scene-loading .badge > div {
+        width: 100%; aspect-ratio: 1; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+        background: radial-gradient(circle at 40% 30%, #fda349, #fc8e49 70%); border: 3px solid var(--white);
+        box-shadow: 0 3px 6px rgba(13,71,91,.3);
+      }
+      #scene-loading img { width: 70%; display: block; }
+      #scene-loading p { margin: 0; font-weight: 700; font-size: clamp(15px, 2.1vh, 19px); color: var(--ink); }
+      @media (prefers-reduced-motion: reduce) { #scene-loading .badge { animation: none; } }
+      #progress-label { font-size: clamp(15px, 2.1vh, 19px); font-weight: 700; color: var(--ink); min-height: 1.3em; margin: 0; }
+
+      #rotate { display: none; background: var(--sky); justify-content: center; }
+      body.mobile.landscape #rotate { display: flex; z-index: 20; }
+      .rotate-icon { width: 54px; height: 88px; border: 5px solid var(--blue); border-radius: 12px; animation: tilt 1.6s ease-in-out infinite; }
+      @keyframes tilt { 0%,100% { transform: rotate(90deg); } 50% { transform: rotate(0deg); } }
+
+      /* Controls hint: near the top of the stage, below the in-game Skip button (top right) and clear
+         of the dialogue box and its Next button at the bottom. */
+      #hint {
+        position: absolute; left: 50%; top: 9%; top: max(9%, calc(env(safe-area-inset-top) + 44px));
+        transform: translateX(-50%);
+        z-index: 5; background: rgba(13,71,91,.9); color: var(--white);
+        border-radius: 14px; padding: 10px 14px; font-size: 15px; line-height: 1.5;
+        width: max-content; max-width: calc(100% - 24px); text-align: center;
+        box-shadow: 0 6px 18px rgba(13,71,91,.3);
+        transition: opacity .45s ease, transform .45s cubic-bezier(.2,1.2,.4,1); pointer-events: none;
+      }
+      #hint.hidden { opacity: 0; transform: translate(-50%, -14px); transition-timing-function: ease, ease-in; }
+      kbd { background: var(--white); color: var(--ink); border-radius: 5px; padding: 0 6px; font-family: inherit; font-weight: 700; font-size: 13px; box-shadow: 0 2px 0 var(--edge); }
+
+      #fullscreen {
+        position: fixed; top: 12px; right: 12px; z-index: 30;
+        width: 42px; height: 42px; border-radius: 12px; border: 0; padding: 0; cursor: var(--cursor-pointer, pointer);
+        display: flex; align-items: center; justify-content: center;
+        background: var(--white); color: var(--blue);
+        box-shadow: 0 3px 0 var(--edge), 0 6px 14px rgba(33,120,155,.2);
+      }
+      #fullscreen svg { width: 24px; height: 24px; display: block; }
+      #fullscreen .fs-exit, #fullscreen.active .fs-enter { display: none; }
+      #fullscreen.active .fs-exit { display: block; }
+      #fullscreen:hover { color: var(--ink); }
+      #fullscreen:focus-visible { outline: 3px solid var(--blue); outline-offset: 3px; }
+      body.mobile #fullscreen { display: none; }
+
+      /* Load errors: a white card with a red accent, and a smaller copy of the Start button to retry. */
+      #error {
+        color: var(--ink); background: var(--white); border-radius: 14px; border-left: 6px solid #d64541;
+        padding: 12px 16px; font-size: clamp(15px, 2vh, 17px); line-height: 1.4; text-align: left;
+        max-width: 34ch; display: none; margin: 0; box-shadow: 0 4px 0 var(--edge), 0 8px 18px rgba(33,120,155,.18);
+        -webkit-user-select: text; user-select: text; overflow-wrap: anywhere; word-break: break-word;
+      }
+      #error .detail { display: block; margin-top: 6px; font-size: .8em; opacity: .7; }
+      #retry-button {
+        display: none; font: inherit; font-weight: 700; font-size: clamp(18px, 2.5vh, 22px);
+        color: var(--ink); background: var(--white); border: 0; border-radius: 18px;
+        padding: .5em 1.8em; cursor: var(--cursor-pointer, pointer);
+        box-shadow: 0 4px 0 var(--edge), 0 8px 18px rgba(33,120,155,.22);
+        transition: transform .08s ease, box-shadow .08s ease;
+      }
+      #retry-button:hover { color: var(--blue); }
+      #retry-button:active { transform: translateY(3px); box-shadow: 0 1px 0 var(--edge), 0 4px 10px rgba(33,120,155,.2); }
+      #retry-button:focus-visible { outline: 3px solid var(--blue); outline-offset: 3px; }
+      #loader.failed #progress, #loader.failed #progress-label, #loader.failed #loading-text { display: none; }
+      #loader.failed #error { display: block; }
+      #loader.failed.can-retry #retry-button { display: inline-block; }
+      @media (prefers-reduced-motion: reduce) {
+        #characters, #logo, #progress-fill, #muncher-badge, .rotate-icon { animation: none; }
+        #hint, #hint.hidden { transform: translateX(-50%); transition: opacity .45s ease; }
+      }
+    </style>
+  </head>
+  <body>
+    <div id="stage">
+      <canvas id="unity-canvas" tabindex="-1"></canvas>
+
+      <div id="splash" aria-hidden="true">
+        <img id="characters" src="TemplateData/characters.webp" alt="">
+        <img id="logo" src="TemplateData/logo.webp" alt="">
+      </div>
+
+      <div id="loader" class="overlay" role="status">
+        <div id="progress" aria-hidden="true">
+          <div id="progress-track"><div id="progress-fill"></div></div>
+          <div id="muncher"><div id="muncher-badge"><img src="TemplateData/head.webp" alt=""></div></div>
+        </div>
+        <p id="progress-label"></p>
+        <p class="subtitle" id="loading-text">Loading…</p>
+        <p id="error" role="alert"></p>
+        <button id="retry-button" type="button">Try again</button>
+      </div>
+
+      <div id="rotate" class="overlay">
+        <div class="rotate-icon"></div>
+        <p class="subtitle" id="rotate-text">Please turn your device to portrait.</p>
+      </div>
+
+      <div id="scene-loading" role="status" aria-live="polite">
+        <div class="badge"><div><img src="TemplateData/head.webp" alt=""></div></div>
+        <p id="scene-loading-text"></p>
+      </div>
+
+      <div id="hint" class="hidden"></div>
+    </div>
+    <button id="fullscreen" type="button" title="Fullscreen" aria-label="Fullscreen">
+      <svg class="fs-enter" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5"/></svg>
+      <svg class="fs-exit" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 4v5H4M20 9h-5V4M15 20v-5h5M4 15h5v5"/></svg>
+    </button>
+
+    <script>
+      (function () {
+        var de = (navigator.language || "en").toLowerCase().indexOf("de") === 0;
+        var T = de ? {
+          loading: "Wird geladen…",
+          downloading: "Spiel wird heruntergeladen… {0} / {1} MB",
+          starting: "Spiel wird gestartet…",
+          rotate: "Bitte drehe dein Gerät ins Hochformat.",
+          hintNoGyro: "Ziehe mit dem Finger, um dich umzusehen.",
+          error: "Das Spiel konnte nicht geladen werden. Bitte verwende einen aktuellen Browser (Chrome, Safari, Edge, Firefox).",
+          noWebgl2: "Dein Browser oder Gerät unterstützt kein WebGL 2, das dieses Spiel braucht. Bitte aktualisiere deinen Browser oder versuche es mit Chrome, Edge, Firefox oder Safari.",
+          retry: "Erneut versuchen",
+          fullscreen: "Vollbild",
+          exitFullscreen: "Vollbild beenden"
+        } : {
+          loading: "Loading…",
+          downloading: "Downloading the game… {0} / {1} MB",
+          starting: "Starting the game…",
+          rotate: "Please turn your device to portrait.",
+          hintNoGyro: "Drag with your finger to look around.",
+          error: "The game could not be loaded. Please use an up-to-date browser (Chrome, Safari, Edge, Firefox).",
+          noWebgl2: "Your browser or device does not support WebGL 2, which this game needs. Please update your browser or try Chrome, Edge, Firefox or Safari.",
+          retry: "Try again",
+          fullscreen: "Fullscreen",
+          exitFullscreen: "Exit fullscreen"
+        };
+        if (de) document.documentElement.lang = "de";
+
+        var isIPadOS = navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1;
+        var coarse = window.matchMedia && window.matchMedia("(pointer: coarse)").matches;
+        var isMobile = isIPadOS || /iPhone|iPad|iPod|Android|Mobi/i.test(navigator.userAgent) || (coarse && navigator.maxTouchPoints > 0);
+
+        // QA switch (not linked anywhere): ?sim=gyro or ?sim=nogyro forces the phone code paths
+        // on a desktop browser. In "gyro" mode the reading is window.BoneEatersWeb.orientation,
+        // which tests set directly; it starts as a phone held upright in portrait.
+        var sim = new URLSearchParams(location.search).get("sim");
+        if (sim === "gyro" || sim === "nogyro") isMobile = true;
+
+        // Shared state read by Assets/Plugins/WebGL/BoneEatersWeb.jslib
+        // gyroState: 0 pending, 1 active, 2 denied, 3 unsupported
+        var web = window.BoneEatersWeb = {
+          isMobile: isMobile,
+          gyroState: isMobile ? 0 : 3,
+          orientation: null,
+          screenAngle: 0,
+          onUnityReady: null,
+          // Called by Unity (BEWeb_SceneLoading) right before and after it switches scenes.
+          sceneLoading: function (on) {
+            var el = document.getElementById("scene-loading");
+            if (!el) return;
+            document.getElementById("scene-loading-text").textContent = T.loading;
+            el.classList.toggle("on", !!on);
+          }
+        };
+
+        document.body.classList.toggle("mobile", isMobile);
+        function updateOrientation() {
+          var angle = (screen.orientation && typeof screen.orientation.angle === "number")
+            ? screen.orientation.angle : (window.orientation || 0);
+          web.screenAngle = angle;
+          var landscape = window.innerWidth > window.innerHeight * 1.05;
+          document.body.classList.toggle("landscape", isMobile && landscape);
+        }
+        window.addEventListener("resize", updateOrientation);
+        window.addEventListener("orientationchange", updateOrientation);
+        updateOrientation();
+
+        document.getElementById("loading-text").textContent = T.loading;
+        document.getElementById("rotate-text").textContent = T.rotate;
+        document.getElementById("retry-button").textContent = T.retry;
+
+        // ---- Gyro ----------------------------------------------------------
+        var listening = false;
+        function onOrientation(e) {
+          if (e.alpha === null && e.beta === null) return;
+          web.orientation = { alpha: e.alpha, beta: e.beta, gamma: e.gamma, t: performance.now() };
+          if (web.gyroState !== 1) web.gyroState = 1;
+        }
+        function startGyro() {
+          if (listening) return;
+          listening = true;
+          window.addEventListener("deviceorientation", onOrientation, true);
+          // No real readings shortly after starting means there is no usable sensor.
+          setTimeout(function () {
+            if (web.gyroState === 0) { web.gyroState = 3; showNoGyroHint(); }
+          }, 1500);
+        }
+        function requestGyro() {
+          if (sim === "nogyro") { web.gyroState = 3; return; }
+          if (sim === "gyro") {
+            web.orientation = { alpha: 0, beta: 90, gamma: 0, t: performance.now() };
+            web.gyroState = 1;
+            setInterval(function () { if (web.orientation) web.orientation.t = performance.now(); }, 250);
+            return;
+          }
+          if (!isMobile || typeof DeviceOrientationEvent === "undefined") { web.gyroState = 3; return; }
+          if (!window.isSecureContext) { web.gyroState = 3; return; }
+          if (typeof DeviceOrientationEvent.requestPermission === "function") {
+            // iOS 13+: must be called directly inside the tap handler.
+            DeviceOrientationEvent.requestPermission().then(function (state) {
+              if (state === "granted") startGyro();
+              else { web.gyroState = 2; showNoGyroHint(); }
+            }).catch(function () { web.gyroState = 2; showNoGyroHint(); });
+          } else {
+            startGyro();
+          }
+        }
+
+        // ---- Hints ---------------------------------------------------------
+        var hint = document.getElementById("hint");
+        var hintShownAt = 0;
+        function hideHint() {
+          clearTimeout(showHint.timer);
+          hint.classList.add("hidden");
+          hintShownAt = 0;
+        }
+        function showHint(html, ms) {
+          hint.innerHTML = html;
+          hint.classList.remove("hidden");
+          hintShownAt = Date.now();
+          clearTimeout(showHint.timer);
+          showHint.timer = setTimeout(hideHint, ms);
+        }
+        function showNoGyroHint() { if (isMobile && started) showHint(T.hintNoGyro, 7000); }
+        // Once the player has had a moment to read it, the first key press or click/tap in the
+        // game puts the hint away so it never covers anything they are about to use.
+        function hideHintOnInput() {
+          if (hintShownAt && Date.now() - hintShownAt >= 2500) hideHint();
+        }
+        window.addEventListener("keydown", hideHintOnInput, true);
+
+        // ---- Fullscreen ----------------------------------------------------
+        function fullscreenElement() { return document.fullscreenElement || document.webkitFullscreenElement || null; }
+        function goFullscreen() {
+          var el = document.documentElement;
+          var req = el.requestFullscreen || el.webkitRequestFullscreen;
+          if (req && !fullscreenElement()) {
+            try {
+              var p = req.call(el);
+              if (p && p.then) p.then(lockPortrait).catch(function () {});
+            } catch (e) {}
+          }
+        }
+        function lockPortrait() {
+          if (screen.orientation && screen.orientation.lock) screen.orientation.lock("portrait").catch(function () {});
+        }
+        var fsButton = document.getElementById("fullscreen");
+        function updateFullscreenButton() {
+          var on = !!fullscreenElement();
+          var label = on ? T.exitFullscreen : T.fullscreen;
+          fsButton.classList.toggle("active", on);
+          fsButton.title = label;
+          fsButton.setAttribute("aria-label", label);
+        }
+        updateFullscreenButton();
+        fsButton.addEventListener("click", function () {
+          if (fullscreenElement()) {
+            var exit = document.exitFullscreen || document.webkitExitFullscreen;
+            if (exit) { try { var p = exit.call(document); if (p && p.catch) p.catch(function () {}); } catch (e) {} }
+          } else {
+            goFullscreen();
+          }
+        });
+
+        // ---- Start --------------------------------------------------------
+        // No start screen: the loader fades straight into the Main Menu. What used to need a tap on
+        // a Start button happens on the player's first tap or click anywhere (usually New Game or
+        // Continue): the iOS motion-sensor prompt (only allowed inside a tap), fullscreen on phones,
+        // and Unity resumes its audio on that same first input.
+        var started = false;
+        var firstInputDone = false;
+        function onFirstInput() {
+          if (firstInputDone) return;
+          firstInputDone = true;
+          window.removeEventListener("touchend", onFirstInput, true);
+          window.removeEventListener("click", onFirstInput, true);
+          requestGyro();          // must run synchronously inside the tap for iOS
+          if (isMobile) goFullscreen();
+        }
+        window.addEventListener("touchend", onFirstInput, true);
+        window.addEventListener("click", onFirstInput, true);
+        // Browsers without a permission prompt (Android) can read the motion sensors right away.
+        if (typeof DeviceOrientationEvent === "undefined" || typeof DeviceOrientationEvent.requestPermission !== "function") requestGyro();
+
+        function startGame() {
+          started = true;
+          finishProgress();
+          loader.classList.add("hidden");
+          splash.classList.add("hidden");
+          document.body.classList.add("game-ready");
+          document.getElementById("unity-canvas").focus();
+          // Desktop gets no list of controls up front: each level's tutorial shows the mouse and
+          // arrow keys when they are needed, and the dialogue buttons carry the Enter keycap.
+          if (isMobile && (web.gyroState === 2 || web.gyroState === 3)) showNoGyroHint();
+        }
+
+        // ---- Unity loader --------------------------------------------------
+        // Render at the same pixel resolution as the phone app. Some UI (the Main Menu canvas) uses
+        // Constant Pixel Size, so a lower-resolution canvas makes it look oversized and pushes
+        // elements off screen. Phones: their real density. Desktop: ~1170 px wide, like an iPhone.
+        var PHONE_WIDTH_PX = 1170;
+        function phonePixelRatio() {
+          if (isMobile) return Math.min(window.devicePixelRatio || 1, 3);
+          var w = document.getElementById("stage").getBoundingClientRect().width || 1;
+          return Math.max(1, Math.min(PHONE_WIDTH_PX / w, 4));
+        }
+        window.addEventListener("resize", function () {
+          var inst = window.unityInstance;
+          if (inst && inst.Module) inst.Module.devicePixelRatio = phonePixelRatio();
+        });
+
+        // Entering or leaving fullscreen leaves Unity's back buffer at zero size, so the game turns
+        // black (WebGL: "Framebuffer is incomplete ... default size is zero"), even though the canvas
+        // keeps its size. Unity only rebuilds the back buffer when the canvas size really changes,
+        // so nudge the pixel ratio for a moment, then restore it.
+        function refreshBackBuffer() {
+          var inst = window.unityInstance;
+          if (!inst || !inst.Module) return;
+          inst.Module.devicePixelRatio = phonePixelRatio() * 1.02;
+          setTimeout(function () { inst.Module.devicePixelRatio = phonePixelRatio(); }, 250);
+        }
+        function onFullscreenChange() { updateFullscreenButton(); setTimeout(refreshBackBuffer, 100); }
+        document.addEventListener("fullscreenchange", onFullscreenChange);
+        document.addEventListener("webkitfullscreenchange", onFullscreenChange);
+
+        var canvas = document.querySelector("#unity-canvas");
+        // The right mouse button is a game control (kitchen zoom/look), not the browser menu.
+        canvas.addEventListener("contextmenu", function (e) { e.preventDefault(); });
+        canvas.addEventListener("pointerdown", hideHintOnInput, true);
+
+        // ---- Themed cursors (desktop) ---------------------------------------
+        // TemplateData/cursors.json lists the hotspot (1x pixels) of each cursor image.
+        // BEWeb_SetCursor in BoneEatersWeb.jslib looks names up in web.cursorCss; names missing
+        // there fall back to the plain CSS keyword. No cursors.json: system cursors stay.
+        web.cursorCss = {};
+        function cssSupports(prop, value) {
+          try { return !!(window.CSS && CSS.supports && CSS.supports(prop, value)); } catch (e) { return false; }
+        }
+        function setupCursor(name, spot) {
+          var base = "TemplateData/cursor-" + name;
+          var url1 = base + ".png", url2 = base + "@2x.png";
+          var img1 = new Image(), img2 = new Image();
+          var pending = 2, ok1 = false, ok2 = false;
+          function settled() {
+            if (--pending > 0 || !ok1) return;
+            var hs = " " + Math.round(spot.x) + " " + Math.round(spot.y);
+            var plain = 'url("' + url1 + '")' + hs;
+            var value = plain + ", " + name;
+            if (ok2) {
+              var sets = ["image-set", "-webkit-image-set"];
+              for (var i = 0; i < sets.length; i++) {
+                var v = sets[i] + '(url("' + url1 + '") 1x, url("' + url2 + '") 2x)' + hs + ", " + plain + ", " + name;
+                if (cssSupports("cursor", v)) { value = v; break; }
+              }
+            }
+            if (!cssSupports("cursor", value)) return;
+            web.cursorCss[name] = value;
+            if (name === "default" || name === "pointer") document.documentElement.style.setProperty("--cursor-" + name, value);
+            // The game may already have asked for this cursor by its keyword.
+            var current = canvas.style.cursor;
+            if (current === name || (name === "default" && !current)) canvas.style.cursor = value;
+          }
+          img1.onload = function () { ok1 = true; settled(); };
+          img2.onload = function () { ok2 = true; settled(); };
+          img1.onerror = img2.onerror = settled;
+          img1.src = url1; img2.src = url2;
+        }
+        if (!isMobile) {
+          canvas.style.cursor = "default";
+          getJSON("TemplateData/cursors.json").then(function (spots) {
+            if (!spots) return;
+            ["default", "pointer", "grab", "grabbing"].forEach(function (name) {
+              var s = spots[name];
+              if (s && typeof s.x === "number" && typeof s.y === "number") setupCursor(name, s);
+            });
+          });
+        }
+
+        // Build files. The builder may add a desktop texture variant (Build-dxt) next to the ASTC
+        // one and list both in Build/variants.json; without that file these template values are used.
+        var variant = {
+          dir: "Build",
+          loader: "19439cbf42d328ca981cbef9323b8d2d.loader.js",
+          framework: "cfdd79be95e01445014b4d25a5d12103.framework.js.unityweb",
+          code: "02cc3e0fc5d2ff3bf7b9b8d0c525739a.wasm.unityweb",
+          data: "22af28f2707a18b433f29dbabc61e2f3.data.unityweb"
+        };
+        var config = {
+          arguments: [],
+          streamingAssetsUrl: "StreamingAssets",
+          companyName: "de.onxt",
+          productName: "BoneEaters",
+          productVersion: "1.0.15",
+          autoSyncPersistentDataPath: true,
+          // ?capture keeps the last frame readable so QA scripts can screenshot the canvas.
+          webglContextAttributes: { preserveDrawingBuffer: new URLSearchParams(location.search).has("capture"), powerPreference: "high-performance" },
+          devicePixelRatio: phonePixelRatio(),
+          showBanner: function (msg, type) {
+            if (type === "error") showError(msg);
+            else console.warn("[Unity]", msg);
+          }
+        };
+
+        var loader = document.getElementById("loader");
+        var splash = document.getElementById("splash");
+        var failed = false;
+        // canRetry: show "Try again" (reloads; parts already downloaded come from the cache).
+        function showError(msg, text, canRetry) {
+          failed = true;
+          stopProgressAnimation();
+          var el = document.getElementById("error");
+          el.textContent = text || T.error;
+          if (msg) {
+            // Technical detail for bug reports, on its own quieter line.
+            var detail = document.createElement("span");
+            detail.className = "detail";
+            detail.textContent = " (" + msg + ")";
+            el.appendChild(detail);
+          }
+          loader.classList.add("failed");
+          loader.classList.toggle("can-retry", canRetry !== false);
+          loader.classList.remove("hidden");
+          splash.classList.remove("hidden");
+        }
+        document.getElementById("retry-button").addEventListener("click", function () { location.reload(); });
+
+        // ---- Progress ------------------------------------------------------
+        // Real progress (bytes downloaded, Unity's own progress) is authoritative and only moves
+        // forward. While nothing reports for a while (unpacking, engine start, first scene), the bar
+        // creeps towards the next milestone, ever more slowly, so it never looks frozen; it never
+        // reaches the milestone before the real event happens. The creep follows the clock, so after
+        // the main thread was busy (Unity starting up blocks it for seconds) the bar catches up.
+        // Milestones:
+        var P_DOWNLOAD = 0.75;  // all bytes downloaded (unpacking follows)
+        var P_FILES = 0.8;      // files ready, Unity engine starting
+        var P_UNITY = 0.84;     // Unity has read the files (its progress 0.9), compiling and starting
+        var P_INSTANCE = 0.92;  // engine running, waiting for the first scene and texts
+        var P_CREEP_MAX = 0.99; // approached until the Start screen appears
+        var CREEP_HALF = 1.6;   // seconds until half of the gap to the next milestone is crept
+        var reduceMotion = !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+        var fill = document.getElementById("progress-fill");
+        var muncher = document.getElementById("muncher");
+        var progressLabel = document.getElementById("progress-label");
+        var loadingText = document.getElementById("loading-text");
+        var real = 0;        // last real progress
+        var creepCap = 0;    // creep target of the current phase (0: no creep)
+        var creepFrom = 0, creepStart = 0;
+        var shown = 0;       // what the bar displays (eases towards the target)
+        var lastPct = -1, rafId = 0, lastTick = 0;
+        function now() { return window.performance ? performance.now() : Date.now(); }
+        // Target at time t: real progress, or the creep from creepFrom towards creepCap if higher.
+        function targetAt(t) {
+          var c = creepFrom;
+          if (creepCap > creepFrom && !reduceMotion) {
+            c = creepCap - (creepCap - creepFrom) / (1 + (t - creepStart) / 1000 / CREEP_HALF);
+          }
+          return Math.max(c, real);
+        }
+        function render() {
+          fill.style.width = (100 * shown).toFixed(2) + "%";
+          // The Bone Eater sits at the end of the fill, eating its way along the bar.
+          muncher.style.left = "calc(4px + (100% - 8px) * " + shown.toFixed(4) + ")";
+          var pct = Math.floor(100 * shown + 0.001);
+          if (pct !== lastPct) { lastPct = pct; progressLabel.textContent = pct + "%"; }
+        }
+        function tick(t) {
+          rafId = 0;
+          var dt = lastTick ? Math.min(0.1, (t - lastTick) / 1000) : 0.016;
+          lastTick = t;
+          var target = targetAt(t);
+          // Ease towards the target (about 0.15 s time constant), never backwards.
+          if (target - shown < 0.0005) shown = Math.max(shown, target);
+          else shown += (target - shown) * (1 - Math.exp(-dt / 0.15));
+          render();
+          if (!failed && (shown < target || creepCap > target + 0.0005)) rafId = requestAnimationFrame(tick);
+          else lastTick = 0;
+        }
+        function kick() {
+          if (failed) return;
+          if (reduceMotion || !window.requestAnimationFrame) { shown = Math.max(shown, real); render(); return; }
+          if (!rafId) rafId = requestAnimationFrame(tick);
+        }
+        function stopProgressAnimation() {
+          if (rafId) cancelAnimationFrame(rafId);
+          rafId = 0; lastTick = 0; creepCap = 0;
+        }
+        // p: real progress (0..1). cap: start creeping towards this value (0 stops creeping;
+        // omitted keeps the current phase).
+        function setProgress(p, cap) {
+          var t = now();
+          var current = targetAt(t);
+          // Never move backwards (the download and Unity's own loading report separately).
+          real = Math.max(real, Math.min(1, p));
+          if (typeof cap === "number" && cap !== creepCap) {
+            creepCap = cap; creepFrom = Math.max(current, real); creepStart = t;
+          } else if (real > current) {
+            creepFrom = real; creepStart = t;
+          }
+          if (creepCap && creepCap <= real) { creepCap = 0; creepFrom = real; }
+          kick();
+        }
+        function finishProgress() {
+          stopProgressAnimation();
+          real = creepFrom = shown = 1;
+          render();
+        }
+        function setStatus(text) { loadingText.textContent = text; }
+        render();
+
+        var unityReady = false, instanceReady = false;
+        function maybeStart() {
+          if (unityReady && instanceReady && !started && !failed) startGame();
+        }
+        web.onUnityReady = function () { unityReady = true; maybeStart(); };
+        function mb(bytes) { return Math.round(bytes / 1048576); }
+
+        function getJSON(url) {
+          return fetch(url, { cache: "no-cache" })
+            .then(function (r) { return r.ok ? r.json() : null; })
+            .catch(function () { return null; });
+        }
+
+        // ASTC textures stay compressed on phones, tablets and Apple Silicon Macs. Other desktop GPUs
+        // only have DXT/BC; given ASTC they would decompress every texture at startup (slow, more memory).
+        // QA: ?tex=astc or ?tex=dxt forces a variant.
+        function pickVariant(list) {
+          if (!list || !list.astc) return null;
+          var forced = new URLSearchParams(location.search).get("tex");
+          if (forced && list[forced]) return list[forced];
+          var astc = false, s3tc = false;
+          try {
+            var probe = document.createElement("canvas");
+            var gl = probe.getContext("webgl2") || probe.getContext("webgl");
+            if (gl) {
+              astc = !!gl.getExtension("WEBGL_compressed_texture_astc");
+              s3tc = !!gl.getExtension("WEBGL_compressed_texture_s3tc");
+              var lose = gl.getExtension("WEBGL_lose_context");
+              if (lose) lose.loseContext();
+            }
+          } catch (e) {}
+          return (!astc && s3tc && list.dxt) ? list.dxt : list.astc;
+        }
+
+        // Every build file is downloaded at the same time (engine code, framework and the game data,
+        // which is split into parts for GitHub's 100 MB limit), with byte-level progress.
+        // Parts are kept in the Cache API across visits (names contain a content hash, so a cached
+        // copy is always valid; GitHub Pages only allows 10 minutes of HTTP caching).
+        // Files are gzip-compressed; the browser's native DecompressionStream unpacks them, which is
+        // much faster than Unity's JavaScript fallback. Unity then receives ready-to-use blob: URLs.
+        var cacheName = "boneeaters-build";
+        var blobUrls = [];
+        var total = 0, loaded = 0;
+        function reportDownload() {
+          // Once every byte is in, creep while the files are unpacked.
+          if (total > 0) setProgress(P_DOWNLOAD * Math.min(1, loaded / total), loaded >= total ? P_FILES : 0);
+          setStatus(T.downloading.replace("{0}", mb(loaded)).replace("{1}", mb(Math.max(total, loaded))));
+        }
+
+        function download(url, knownSize) {
+          return fetch(url).then(function (res) {
+            if (!res.ok) throw new Error(url + " " + res.status);
+            if (!knownSize) { total += Number(res.headers.get("Content-Length")) || 0; }
+            if (!res.body || !res.body.getReader) {
+              return res.arrayBuffer().then(function (b) { loaded += b.byteLength; reportDownload(); return [new Uint8Array(b)]; });
+            }
+            var reader = res.body.getReader(), chunks = [];
+            function pump() {
+              return reader.read().then(function (r) {
+                if (r.done) return chunks;
+                chunks.push(r.value);
+                loaded += r.value.byteLength;
+                reportDownload();
+                return pump();
+              });
+            }
+            return pump();
+          });
+        }
+
+        function fetchPart(url, knownSize) {
+          if (!window.caches) return download(url, knownSize);
+          return caches.open(cacheName).then(function (cache) {
+            return cache.match(url).then(function (hit) {
+              if (hit) {
+                return hit.arrayBuffer().then(function (b) {
+                  if (!knownSize) total += b.byteLength;
+                  loaded += b.byteLength; reportDownload(); return [new Uint8Array(b)];
+                });
+              }
+              return download(url, knownSize).then(function (chunks) {
+                cache.put(url, new Response(new Blob(chunks))).catch(function () {});
+                return chunks;
+              });
+            });
+          }).catch(function () { return download(url, knownSize); });
+        }
+
+        var nativeGunzip = typeof DecompressionStream === "function";
+        function toBlobUrl(chunks, type) {
+          var blob = new Blob(chunks);
+          var first = chunks[0];
+          var gzip = first && first.length > 2 && first[0] === 0x1f && first[1] === 0x8b;
+          if (!gzip || !nativeGunzip) return Promise.resolve(URL.createObjectURL(blob));
+          return new Response(blob.stream().pipeThrough(new DecompressionStream("gzip"))).blob()
+            .then(function (out) { return URL.createObjectURL(type ? new Blob([out], { type: type }) : out); })
+            // Anything unexpected: hand Unity the compressed file, it can still unpack it itself.
+            .catch(function () { return URL.createObjectURL(blob); });
+        }
+
+        function fetchFile(name, parts, type) {
+          var list = parts[name] ? parts[name].parts : [name];
+          var known = !!parts[name];
+          if (known) total += parts[name].size;
+          return Promise.all(list.map(function (p) { return fetchPart(variant.dir + "/" + p, known); }))
+            .then(function (lists) {
+              var all = [];
+              lists.forEach(function (l) { all = all.concat(l); });
+              return toBlobUrl(all, type);
+            })
+            .then(function (url) { blobUrls.push(url); return url; });
+        }
+
+        var loaderReady = false, filesReady = false, launched = false;
+        function maybeLaunch() {
+          if (loaderReady && filesReady && !launched) { launched = true; launch(); }
+        }
+
+        // The game renders with WebGL 2. Without it, say so plainly instead of downloading ~200 MB
+        // only to fail at the end.
+        function hasWebGL2() {
+          try {
+            var probe = document.createElement("canvas");
+            var gl = probe.getContext("webgl2");
+            if (!gl) return false;
+            var lose = gl.getExtension("WEBGL_lose_context");
+            if (lose) lose.loseContext();
+            return true;
+          } catch (e) { return false; }
+        }
+        if (!hasWebGL2()) {
+          showError(null, T.noWebgl2, false);
+          return;
+        }
+
+        getJSON("Build/variants.json")
+          .then(function (list) {
+            var chosen = pickVariant(list);
+            if (chosen) variant = chosen;
+            console.log("[BoneEaters] build variant:", variant.dir);
+            // The loader script downloads alongside the build files.
+            var script = document.createElement("script");
+            script.src = variant.dir + "/" + variant.loader;
+            script.onerror = function () { showError("loader"); };
+            script.onload = function () { loaderReady = true; maybeLaunch(); };
+            document.body.appendChild(script);
+            return getJSON(variant.dir + "/parts.json");
+          })
+          .then(function (parts) {
+            parts = parts || {};
+            return Promise.all([
+              fetchFile(variant.framework, parts, "text/javascript"),
+              fetchFile(variant.code, parts, "application/wasm"),
+              fetchFile(variant.data, parts, null)
+            ]).then(function (urls) {
+              config.frameworkUrl = urls[0];
+              config.codeUrl = urls[1];
+              config.dataUrl = urls[2];
+              // Drop cached parts of older builds (and of the other texture variant).
+              if (window.caches) {
+                var keep = {};
+                [variant.framework, variant.code, variant.data].forEach(function (n) {
+                  (parts[n] ? parts[n].parts : [n]).forEach(function (p) { keep[p] = true; });
+                });
+                caches.open(cacheName).then(function (cache) {
+                  cache.keys().then(function (reqs) {
+                    reqs.forEach(function (r) { if (!keep[r.url.split("/").pop()]) cache.delete(r); });
+                  });
+                }).catch(function () {});
+              }
+              setProgress(P_FILES, P_INSTANCE);
+              filesReady = true;
+              maybeLaunch();
+            });
+          })
+          .catch(function (e) { showError(String(e && e.message || e)); });
+
+        function launch() {
+          setStatus(T.starting);
+          createUnityInstance(canvas, config, function (progress) {
+            // Unity reaches 0.9 almost at once (the files are already here), then holds it while
+            // the engine compiles and starts; creep through that part.
+            if (progress < 1) setProgress(P_FILES + (P_UNITY - P_FILES) * Math.min(1, progress / 0.9));
+            else setProgress(P_INSTANCE, P_CREEP_MAX);
+          }).then(function (instance) {
+            window.unityInstance = instance;
+            // Unity has copied the data into its own memory; free the downloads (matters on iPhone).
+            blobUrls.forEach(function (u) { URL.revokeObjectURL(u); });
+            blobUrls = [];
+            instanceReady = true;
+            // The first scene and its texts still load; creep until C# reports ready.
+            setProgress(P_INSTANCE, P_CREEP_MAX);
+            // Fallback in case the ready callback from C# never arrives.
+            setTimeout(function () { unityReady = true; maybeStart(); }, 15000);
+            maybeStart();
+          }).catch(function (message) {
+            showError(String(message));
+          });
+        }
+      })();
+    </script>
+  </body>
+</html>

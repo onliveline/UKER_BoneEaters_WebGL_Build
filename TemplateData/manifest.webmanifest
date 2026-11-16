@@ -1,0 +1,15 @@
+{
+  "name": "Bone Eaters",
+  "short_name": "Bone Eaters",
+  "description": "Shrink down into the human body and help the Bone Builder stop the Bone Eaters. Play in your browser on desktop or phone.",
+  "start_url": "../",
+  "scope": "../",
+  "display": "fullscreen",
+  "orientation": "portrait",
+  "background_color": "#d5f3ff",
+  "theme_color": "#d5f3ff",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" }
+  ]
+}
